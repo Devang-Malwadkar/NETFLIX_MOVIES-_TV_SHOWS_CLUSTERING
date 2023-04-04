@@ -1,0 +1,358 @@
+
+
+# function to remove punctuations
+def remove_punctuation(text):
+    '''a function for removing punctuation'''
+    translator = str.maketrans('', '', string.punctuation)
+    # return the text stripped of punctuation marks
+    return text.translate(translator)
+    
+    
+    # Removing punctuation marks
+Dataset['clustering'] = Dataset['clustering'].apply(remove_punctuation)
+
+
+# Select the 100 number of clusters for the dataset 
+Dataset['clustering'][100]
+
+
+# function to remove non-ascii characters
+
+def remove_non_ascii(words):
+    """Function to remove non-ASCII characters"""
+    new_words = []
+    for word in words:
+        new_word = unicodedata.normalize('NFKD', word).encode('ascii', 'ignore').decode('utf-8', 'ignore')
+        new_words.append(new_word)
+    return new_words
+    
+    
+    # remove non-ascii characters
+Dataset['clustering'] = remove_non_ascii(Dataset['clustering'])
+
+# Select the 100 number of clusters for the dataset 
+Dataset['clustering'][100]
+
+
+# extracting the stopwords from nltk library
+import nltk
+from nltk.corpus import stopwords
+sentences = stopwords.words('english')
+# displaying the stopwords
+np.array(sentences)
+
+
+# function to remove stop words
+def remove_stopwords(text):
+    '''a function for removing the stopword'''
+    # removing the stop words and lowercasing the selected words
+    text = [word.lower() for word in text.split() if word.lower() not in sentences]
+    # joining the list of words with space separator
+    return " ".join(text)
+    
+    
+    
+    # Removing stop words
+Dataset['clustering'] = Dataset['clustering'].apply(remove_stopwords)
+
+
+# Select the 100 number of clusters for the dataset 
+Dataset['clustering'][100]
+
+
+# function to lemmatize the corpus
+def lemmatize_verbs(words):
+    """Lemmatize verbs in list of tokenized words"""
+    lemmatizer = WordNetLemmatizer()
+    lemmas = []
+    for word in words:
+        lemma = lemmatizer.lemmatize(word, pos='v')
+        lemmas.append(lemma)
+    return lemmas
+    
+    
+    # Lemmatization
+Dataset['clustering'] = lemmatize_verbs(Dataset['clustering'])
+
+
+# Select the 100 number of clusters for the dataset 
+print(Dataset['clustering'][100])
+
+
+# Create a reference variable for Class TweetTokenizer
+tokenizer = TweetTokenizer()
+
+
+# Create text column based on dataset
+Dataset['clustering'] = Dataset['clustering'].apply(lambda x: tokenizer.tokenize(x))
+
+
+# Select the 100 number of Tokenization for the dataset 
+print(Dataset['clustering'][100])
+
+
+# clustering tokens saved in a variable
+clustering_vectorization = Dataset['clustering']
+
+
+# Tokenization
+def tokenizer(text):
+  return text
+
+# Using TFIDF vectorizer to vectorize the corpus 
+# max features = 20000 to prevent system from crashing
+tfidf = TfidfVectorizer(tokenizer=tokenizer, stop_words='english', lowercase=False,max_features = 20000)    
+x = tfidf.fit_transform(clustering_vectorization)
+
+
+# Dataset Rows & Columns count
+x.shape
+
+# convert X into array form for clustering
+X = x.toarray()
+
+# Check the matrix
+X
+
+
+# using PCA to reduce dimensionality
+pca = PCA(random_state=40)
+pca.fit(X)
+
+
+# Explained variance for different number of components
+plt.figure(figsize=(10,5))
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.title('PCA - Cumulative explained variance vs number of components')
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance')
+
+
+# reducing the dimensions to 4000 using pca
+pca = PCA(n_components=4000,random_state=40)
+pca.fit(X)
+
+
+# transformed features
+x_pca = pca.transform(X)
+
+
+# Elbow method to find the optimal value of k
+wcss=[]
+for i in range(1,31):
+  kmeans = KMeans(n_clusters=i,init='k-means++',random_state=33)
+  kmeans.fit(x_pca)
+  wcss_iter = kmeans.inertia_
+  wcss.append(wcss_iter)
+
+number_clusters = range(1,31)
+plt.figure(figsize=(10,5))
+plt.plot(number_clusters,wcss)
+plt.title('The Elbow Method - KMeans clustering')
+plt.xlabel('Number of clusters')
+plt.ylabel('WCSS')
+
+
+# Plotting Silhouette score for different umber of clusters
+range_n_clusters = range(2,31)
+silhouette_avg = []
+for num_clusters in range_n_clusters:
+  # initialize kmeans
+  kmeans = KMeans(n_clusters=num_clusters,init='k-means++',random_state=33)
+  kmeans.fit(x_pca)
+  cluster_labels = kmeans.labels_
+ 
+  # silhouette score
+  silhouette_avg.append(silhouette_score(x_pca, cluster_labels))
+
+plt.figure(figsize=(10,5))
+plt.plot(range_n_clusters,silhouette_avg)
+plt.xlabel('Values of K') 
+plt.ylabel('Silhouette score')
+plt.title('Silhouette analysis For Optimal k - KMeans clustering')
+plt.show()
+
+
+# Clustering the data into 19 clusters
+kmeans = KMeans(n_clusters=6,init='k-means++',random_state=40)
+kmeans.fit(x_pca)
+
+# Adding a kmeans cluster number attribute
+Dataset['kmeans_cluster'] = kmeans.labels_
+
+# Evaluation metrics - distortion, Silhouette score
+kmeans_distortion = kmeans.inertia_
+kmeans_silhouette_score = silhouette_score(x_pca, kmeans.labels_)
+
+print((kmeans_distortion,kmeans_silhouette_score))
+
+
+# Number of movies and tv shows in each cluster
+plt.figure(figsize=(10,5))
+q = sns.countplot(x='kmeans_cluster',data=Dataset, hue='type')
+plt.title('Number of movies and TV shows in each cluster - Kmeans Clustering')
+for i in q.patches:
+  q.annotate(format(i.get_height(), '.0f'), (i.get_x() + i.get_width() / 2., i.get_height()), ha = 'center', va = 'center', xytext = (0, 10), textcoords = 'offset points')
+  
+  
+  # Building a wordcloud for the movie descriptions
+def kmeans_worldcloud(cluster_num):
+  comment_words = ''
+  stopwords = set(STOPWORDS)
+
+  # iterate through the csv file
+  for val in Dataset[Dataset['kmeans_cluster']==cluster_num].description.values:
+      
+      # typecaste each val to string
+      val = str(val)
+
+      # split the value
+      tokens = val.split()
+      
+      # Converts each token into lowercase
+      for i in range(len(tokens)):
+          tokens[i] = tokens[i].lower()
+      
+      comment_words += " ".join(tokens)+" "
+
+  wordcloud = WordCloud(width = 700, height = 700,
+                  background_color ='white',
+                  stopwords = stopwords,
+                  min_font_size = 10).generate(comment_words)
+
+
+
+
+plt.figure(figsize = (10,5), facecolor = None)
+plt.imshow(wordcloud)
+plt.axis("off")
+plt.tight_layout(pad = 0)
+
+
+# Building a dendogram to decide on the number of clusters
+plt.figure(figsize=(16, 7))  
+dend = shc.dendrogram(shc.linkage(x_pca, method='ward'))
+plt.title('Dendrogram')
+plt.xlabel('Netflix Shows')
+plt.ylabel('Distance')
+plt.axhline(y= 3.8, color='r', linestyle='--')
+
+
+# Fitting hierarchical clustering model
+hierarchical = AgglomerativeClustering(n_clusters=12, affinity='euclidean', linkage='ward')  
+hierarchical.fit_predict(x_pca)
+
+
+# Adding a kmeans cluster number attribute
+Dataset['hierarchical_cluster'] = hierarchical.labels_
+
+# Number of movies and tv shows in each cluster
+plt.figure(figsize=(10,5))
+q = sns.countplot(x='hierarchical_cluster',data=Dataset, hue='type')
+plt.title('Number of movies and tv shows in each cluster - Hierarchical Clustering')
+for i in q.patches:
+  q.annotate(format(i.get_height(), '.0f'), (i.get_x() + i.get_width() / 2., i.get_height()), ha = 'center', va = 'center', xytext = (0, 10), textcoords = 'offset points')
+  
+  
+  # Building a wordcloud for the movie descriptions
+def hierarchical_worldcloud(cluster_num):
+  comment_words = ''
+  stopwords = set(STOPWORDS)
+
+  # iterate through the csv file
+  for val in Dataset[Dataset['hierarchical_cluster']==cluster_num].description.values:
+      
+      # typecaste each val to string
+      val = str(val)
+
+      # split the value
+      tokens = val.split()
+      
+      # Converts each token into lowercase
+      for i in range(len(tokens)):
+          tokens[i] = tokens[i].lower()
+      
+      comment_words += " ".join(tokens)+" "
+
+  wordcloud = WordCloud(width = 700, height = 700,
+                  background_color ='white',
+                  stopwords = stopwords,
+                  min_font_size = 10).generate(comment_words)
+  return hierarchical_worldcloud
+  
+  
+  
+  
+    # plot the WordCloud image                      
+plt.figure(figsize = (10,5), facecolor = None)
+plt.imshow(wordcloud)
+plt.axis("off")
+plt.tight_layout(pad = 0)
+
+
+
+
+
+
+# Changing the index of the df from show id to show title
+Dataset['show_id'] = Dataset.index
+
+
+# converting tokens to string
+def convert(lst):
+  return ' '.join(lst)
+
+Dataset['clustering'] = Dataset['clustering'].apply(lambda x: convert(x))
+
+
+# setting title of movies/Tv shows as index
+Dataset.set_index('title',inplace=True)
+
+
+# Count vectorizer
+CV = CountVectorizer()
+converted_matrix = CV.fit_transform(Dataset['clustering'])
+
+
+# Cosine similarity
+cosine_similarity = cosine_similarity(converted_matrix)
+
+
+# Dataset Rows & Columns count
+cosine_similarity.shape
+
+
+# Developing a function to get 10 recommendations for a show
+indices = pd.Series(Dataset.index)
+
+def Dataset_10(title, cosine_sim = cosine_similarity):
+  try:
+    recommend_content = []   
+    idx = indices[indices == title].index[0]
+    series = pd.Series(cosine_sim[idx]).sort_values(ascending = False)
+    top10 = list(series.iloc[1:11].index)
+    # list with the titles of the best 10 matching movies
+    for i in top10:
+      recommend_content.append(list(Dataset.index)[i])
+    print("If you liked '"+title+"', you may also enjoy:\n")
+    return recommend_content
+
+  except:
+    return 'Invalid Entry'
+    
+    
+    
+    
+    # Recommendations for 'A Man Called God'
+Dataset_10('A Man Called God')
+
+
+
+# Recommendations for 'Peaky Blinders'
+Dataset_10('Peaky Blinders')
+
+
+# Recommendations for 'Stranger Things'
+Dataset_10('Stranger Things')
+
+
