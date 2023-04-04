@@ -1,0 +1,462 @@
+# Import Libraries
+
+import numpy as np
+import pandas as pd
+from numpy import math
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
+from matplotlib.pyplot import figure
+import plotly.graph_objects as go
+import plotly.offline as py
+import plotly.express as px
+from datetime import datetime as dt
+
+from wordcloud import WordCloud, STOPWORDS
+import re, string, unicodedata
+
+import nltk
+from bs4 import BeautifulSoup
+from nltk import word_tokenize, sent_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import LancasterStemmer, WordNetLemmatizer
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import PCA
+
+from nltk.stem import WordNetLemmatizer
+nltk.download('wordnet')
+import nltk
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+import string
+string.punctuation
+nltk.download('omw-1.4')
+from nltk.tokenize import TweetTokenizer
+
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import AgglomerativeClustering
+import scipy.cluster.hierarchy as shc
+
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+import warnings
+warnings.filterwarnings('ignore')
+
+
+
+
+
+
+
+
+df = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/Almabetter_solution_assignment/NETFLIX MOVIES AND TV SHOWS CLUSTERING.csv')
+
+
+
+df.head()
+
+
+
+# Dataset Last Look
+df.tail()
+
+# Dataset Rows & Columns count
+df.shape
+
+
+# Dataset Info
+df.info()
+
+# Dataset Duplicate Value Count
+df[df.duplicated()]
+
+
+# Missing Values/Null Values Count
+print(df.isnull().sum())
+
+
+# Visualizing the missing values
+# Checking Null Value by plotting Heatmap
+plt.figure(figsize=(7,5))
+sns.heatmap(df.isnull(), cbar=False)
+plt.show()
+
+
+
+#GRAPHICALLY SHOWING THE PERCENTAGE OF MISSING VALUES 
+missing = pd.DataFrame((df.isnull().sum())*100/df.shape[0]).reset_index()
+plt.figure(figsize=(10,4))
+ax = sns.pointplot(x='index', y=0, data=missing)
+plt.xticks(rotation=90, fontsize=7)
+plt.title("Percentage of Missing values")
+plt.ylabel("PERCENTAGE")
+plt.show()
+
+
+# Dataset Columns
+df.columns
+
+
+
+# Dataset Describe
+df.describe(include='all')
+
+
+# Check Unique Values for each variable.
+for i in df.columns.tolist():
+  print("No. of unique values in ",i,"is",df[i].nunique(),".")
+  
+  
+  #total null values
+df.isnull().sum().sum()
+
+
+# Handling the missing values
+df[['director','cast','country']] = df[['director','cast','country']].fillna('Unknown')
+df['rating'] = df['rating'].fillna(df['rating'].mode()[0])
+df.dropna(axis=0, inplace = True)
+
+
+#again checking is there any null values are not
+df.isnull().sum()
+
+# Dataset Rows & Columns count
+df.shape
+
+
+# Top countries
+df.country.value_counts()
+
+
+# Genre of shows
+df.listed_in.value_counts()
+
+
+# Choosing the primary country and primary genre to simplify the analysis
+df['country'] = df['country'].apply(lambda x: x.split(',')[0])
+df['listed_in'] = df['listed_in'].apply(lambda x: x.split(',')[0])
+
+
+# contry in which a movie was produced
+df.country.value_counts()
+
+# genre of shows
+df.listed_in.value_counts()
+
+
+# Splitting the duration column, and changing the datatype to integer
+df['duration'] = df['duration'].apply(lambda x: int(x.split()[0]))
+
+
+# Number of seasons for tv shows
+df[df['type']=='TV Show'].duration.value_counts()
+
+
+# Movie length in minutes
+df[df['type']=='Movie'].duration.unique()
+
+
+# Typecasting 'date_added' from string to datetime
+df['date_added '] = pd.to_datetime(df['date_added'])
+
+
+df['date_added'] = pd.to_datetime(df['date_added'], errors='coerce')
+
+# first and last date on which a show was added on Netflix
+df.date_added.min(),df.date_added.max()
+
+# Adding new attributes month and year of date added
+
+df['month_added'] = df['date_added'].dt.month
+df['year_added'] = df['date_added'].dt.year
+df.drop('date_added', axis=1, inplace=True)
+
+
+# Dataset Rows & Columns count
+df.shape
+
+
+# Dataset Info
+df.info()
+
+#chart-1
+# Number of Movies and TV Shows in the dataset
+plt.figure(figsize=(4,4))
+df.type.value_counts().plot(kind='pie',autopct='%1.2f%%')
+plt.ylabel('')
+plt.title('Movies and TV Shows in the dataset')
+
+
+#chart-2
+# Top 10 directors in the dataset
+plt.figure(figsize=(5,3))
+df[~(df['director']=='Unknown')].director.value_counts().nlargest(10).plot(kind='bar')
+plt.title('Top 10 directors by number of shows directed')
+
+
+#chart-3
+# Top 10 countries with the highest number movies / TV shows in the dataset
+plt.figure(figsize=(5,3))
+df[~(df['country']=='Unknown')].country.value_counts().nlargest(10).plot(kind='bar')
+plt.title(' Top 10 countries with the highest number of shows')
+
+
+# % share of movies / tv shows by top 3 countries
+df.country.value_counts().nlargest(3).sum()/len(df)*100
+
+
+# % share of movies / tv shows by top 10 countries
+df.country.value_counts().nlargest(10).sum()/len(df)*100
+
+
+#chart-4
+# Visualizing the year in which the movie / tv show was released
+plt.figure(figsize=(5,3))
+sns.histplot(df['release_year'])
+plt.title('distribution by released year')
+
+
+#chart-5
+# Length distribution of movies
+movie_df = df[df['type']=='Movie']
+
+plt.figure(figsize=(7, 4))
+
+sns.distplot(movie_df['duration'], bins=30,color='Blue').set(ylabel=None)
+
+plt.title('Length distribution of movies', fontsize=16,fontweight="bold")
+plt.xlabel('Duration', fontsize=14)
+plt.show()
+
+
+#chart-6
+# Age ratings for shows in the dataset
+plt.figure(figsize=(10,5))
+sns.countplot(x='rating',data=df)
+
+
+# Changing the values in the rating column
+rating_map = {'TV-MA':'Adults',
+              'R':'Adults',
+              'PG-13':'Teens',
+              'TV-14':'Young Adults',
+              'TV-PG':'Older Kids',
+              'NR':'Adults',
+              'TV-G':'Kids',
+              'TV-Y':'Kids',
+              'TV-Y7':'Older Kids',
+              'PG':'Older Kids',
+              'G':'Kids',
+              'NC-17':'Adults',
+              'TV-Y7-FV':'Older Kids',
+              'UR':'Adults'}
+
+df['rating'].replace(rating_map, inplace = True)
+df['rating'].unique()
+
+
+df['principal_country'] = df['country'].apply(lambda x: x.split(",")[0])
+df['principal_country'].head()
+
+country_order = df['principal_country'].value_counts()[:11].index
+content_data = df[['type', 'principal_country']].groupby('principal_country')['type'].value_counts().unstack().loc[country_order]
+content_data['sum'] = content_data.sum(axis=1)
+content_data_ratio = (content_data.T / content_data['sum']).T[['Movie', 'TV Show']].sort_values(by='Movie',ascending=False)[::-1]
+
+
+
+df['count'] = 1
+data = df.groupby('principal_country')[['principal_country','count']].sum().sort_values(by='count',ascending=False).reset_index()[:10]
+data = data['principal_country']
+
+Flix_df_heatmap = df.loc[df['principal_country'].isin(data)]
+Flix_df_heatmap = pd.crosstab(Flix_df_heatmap['principal_country'], Flix_df_heatmap['rating'],normalize = "index").T
+Flix_df_heatmap
+
+
+
+#chart-7
+# Plotting the heatmap
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+country_order2 = ['United States', 'India', 'United Kingdom', 'Canada', 'Japan', 'France', 'South Korea', 'Spain',
+       'Mexico']
+
+age_order = ['Adults', 'Teens', 'Young Adults', 'Older Kids', 'Kids']
+
+sns.heatmap(Flix_df_heatmap.loc[age_order,country_order2],cmap="jet",square=True, linewidth=2.5,cbar=False,
+            annot=True,fmt='2.0%',vmax=.6,vmin=0.05,ax=ax,annot_kws={"fontsize":15})
+
+ax.spines['top'].set_visible(True)
+
+fig.text(.76,.765, 'Target ages proportion of total content by country', fontweight='bold', fontfamily='serif', fontsize=15,ha='right')   
+
+ax.set_yticklabels(ax.get_yticklabels(), fontfamily='serif', rotation = 0, fontsize=11)
+ax.set_xticklabels(ax.get_xticklabels(), fontfamily='serif', rotation=90, fontsize=11)
+
+ax.set_ylabel('')    
+ax.set_xlabel('')
+ax.tick_params(axis=u'both', which=u'both',length=0)
+plt.tight_layout()
+plt.show()
+
+
+#chart-8
+# Age ratings for shows in the dataset
+plt.figure(figsize=(10,5))
+sns.countplot(x='rating',data=df)
+plt.title('Number of shows on Netflix for different age groups')
+
+#chart-9
+# Top 10 genres 
+plt.figure(figsize=(7,4))
+df.listed_in.value_counts().nlargest(10).plot(kind='bar')
+plt.title('Top 10 genres')
+
+
+
+# Share of top 3 genres
+df.listed_in.value_counts().nlargest(3).sum()/len(df)*100
+
+
+# Share of top 10 genres
+df.listed_in.value_counts().nlargest(10).sum()/len(df)*100
+
+#chart-10
+# Number of shows added on different months
+plt.figure(figsize = (10,5)) 
+sns.countplot(df['month_added'])
+plt.title('Shows added each month over the years')
+plt.xlabel('')
+
+
+
+#chart-11
+# Number of shows added over the years
+plt.figure(figsize = (10,5)) 
+sns.countplot(df['year_added'])
+plt.title('Number of shows added each year')
+plt.xlabel('')
+
+
+#chart-12
+# Number of movies and TV shows added over the years
+plt.figure(figsize=(10,5))
+p = sns.countplot(x='year_added',data=df, hue='type')
+plt.title('Number of movies and TV shows added over the years')
+plt.xlabel('')
+for i in p.patches:
+  p.annotate(format(i.get_height(), '.0f'), (i.get_x() + i.get_width() / 2., i.get_height()), ha = 'center', va = 'center', xytext = (0, 10), textcoords = 'offset points')
+  
+  
+  
+  
+  #chart-13
+# Number of shows released each year since 2008
+order = range(2008,2022)
+plt.figure(figsize=(10,5))
+p = sns.countplot(x='release_year',data=df, hue='type',
+                  order = order)
+plt.title('Number of shows released each year since 2008 that are on Netflix')
+plt.xlabel('')
+for i in p.patches:
+  p.annotate(format(i.get_height(), '.0f'), (i.get_x() + i.get_width() / 2., i.get_height()), ha = 'center', va = 'center', xytext = (0, 10), textcoords = 'offset points')
+  
+  
+  
+  #chart-14
+# Seasons in each TV show
+plt.figure(figsize=(10,5))
+p = sns.countplot(x='duration',data=df[df['type']=='TV Show'])
+plt.title('Number of seasons per TV show distribution')
+
+for i in p.patches:
+  p.annotate(format(i.get_height(), '.0f'), (i.get_x() + i.get_width() / 2., i.get_height()), ha = 'center', va = 'center', xytext = (0, 10), textcoords = 'offset points')
+  
+  
+  
+  # Movie statistics
+df[df['type']== 'Movie'].duration.describe()
+
+
+#chart-15
+# Top 10 genre for movies
+plt.figure(figsize=(10,5))
+df[df['type']=='TV Show'].listed_in.value_counts().nlargest(10).plot(kind='bar')
+plt.title('Top 10 genres for movies')
+
+
+#chart-16
+# Top actors for movies
+plt.figure(figsize=(10,5))
+df[~(df['cast']=='Unknown') & (df['type']=='Movie')].cast.value_counts().nlargest(10).plot(kind='barh')
+plt.title('Actors who have appeared in highest number of movies')
+
+
+#chart-17
+# Top actors for TV shows
+plt.figure(figsize=(10,5))
+df[~(df['cast']=='Unknown') & (df['type']=='TV Show')].cast.value_counts().nlargest(10).plot(kind='barh')
+plt.title('Actors who have appeared in highest number of TV shows')
+
+
+#chart-18
+# Building a wordcloud for the movie descriptions
+comment_words = ''
+stopwords = set(STOPWORDS)
+
+# iterate through the csv file
+for val in df.description.values:
+    
+    # typecaste each val to string
+    val = str(val)
+
+    # split the value
+    tokens = val.split()
+    
+    # Converts each token into lowercase
+    for i in range(len(tokens)):
+        tokens[i] = tokens[i].lower()
+    
+    comment_words += " ".join(tokens)+" "
+
+wordcloud = WordCloud(width = 700, height = 700,
+                background_color ='white',
+                stopwords = stopwords,
+                min_font_size = 10).generate(comment_words)
+
+
+# plot the WordCloud image                      
+plt.figure(figsize = (7,4), facecolor = None)
+plt.imshow(wordcloud)
+plt.axis("off")
+plt.tight_layout(pad = 0)
+
+
+
+
+# Using the original dataset for clustering since
+# it does not require handling missing values
+Dataset = df.copy()
+
+
+
+Dataset.fillna('',inplace=True)
+
+
+# Combining all the clustering attributes into a single column
+
+Dataset['clustering'] = (Dataset['director'] + ' ' + 
+                                Dataset['cast'] +' ' + 
+                                Dataset['country'] +' ' + 
+                                Dataset['listed_in'] +' ' + 
+                                Dataset['description'])
+                                
+                                
+                                
+                                # Select the 100 number of clusters for the dataset 
+Dataset['clustering'][100]
+
+
